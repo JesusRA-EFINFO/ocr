@@ -1,0 +1,1 @@
+Dentro de la carptea /tmp, se copiaran los pdfs a reconocer y se generarán los temporales.
