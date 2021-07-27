@@ -30,14 +30,20 @@ async function main() {
       await IMAGES.convert(filePath, outPath);
 
       const imagePaths = await fsPromises.readdir(outPath);
-      const imagesPromises = imagePaths.map(async (imagePath) => {
+      let ocrText = "";
+      for (let j = 0; j < imagePaths.length; j++) {
+        ocrText += " " + (await OCR.recognize(`${outPath}/${imagePaths[j]}`));
+        fs.unlinkSync(`${outPath}/${imagePaths[j]}`);
+      }
+      //Para hacer el tesseract de forma asincrona
+      /*const imagesPromises = imagePaths.map(async (imagePath) => {
         const text = await OCR.recognize(`${outPath}/${imagePath}`);
         fs.unlinkSync(`${outPath}/${imagePath}`);
         return text;
       });
 
       const texts = await Promise.all(imagesPromises);
-      let ocrText = texts.toString();
+      let ocrText = texts.toString();*/
       fs.rmdirSync(outPath);
       ocrText = ocrText.replace(/'/g, " ");
       ocrText = ocrText.replace(/\r?\n|\r/g, " ");
