@@ -2,6 +2,7 @@
 //imagemagick: https://download.imagemagick.org/ImageMagick/download/binaries/ImageMagick-7.1.0-4-Q16-HDRI-x64-dll.exe
 //ghost: https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs9540/gs9540w64.exe
 //pdftk: https://www.pdflabs.com/tools/pdftk-the-pdf-toolkit/pdftk_free-2.02-win-setup.exe
+//pdftk Linux: RUN apt-get install -y pdftk
 
 //El servicio se mantiene corriendo indefinidamente, para que el texto de un pdf sea reconocido se debe agregar a la carpeta /tmp y automáticamente generará el texto y lo pintará dentro de la consola. Al final de la ejecución el pdf será eliminado, igual que todos los temporales creados durante el proceso.
 //El imagemagick convert se ejecuta de manera síncrona va pdf por pdf. El tesseract lo genera de forma simultanea varias imagenes a la vez.

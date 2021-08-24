@@ -1,4 +1,5 @@
 const imagemagick = require("imagemagick");
+const { exec } = require("child_process")
 
 class Images {
   static async convert(filePath, outPath) {
@@ -30,6 +31,22 @@ class Images {
       );
     });
   }
+
+  static makeTiffFromImages(pdfName, workDirectory){
+    return new Promise((resolve, reject) => {
+      imagemagick.convert(
+        [
+          `${workDirectory}/*.jpg`,
+          `${workDirectory}/${pdfName}.tiff`,
+        ],
+        error => {
+          if(error) reject(error)
+          resolve(error)
+        }
+      )
+    })
+  }
+
 }
 
 module.exports = Images;
