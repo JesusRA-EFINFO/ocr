@@ -8,9 +8,10 @@ const IMAGES = require("./images");
 const DATABASE = require("./database");
 const OCRDB = require("./ocrDB");
 const OCRSOLR = require("./ocrSolr");
+const PDF = require("./pdf");
 
 const tempPath = `./tmp`;
-const { morsaaDBconfig, solrconfig } = getEnvVars();
+const { morsaaDBconfig, solrconfig, generatedPDFSPath } = getEnvVars();
 const db = new DATABASE(morsaaDBconfig);
 main();
 
@@ -19,47 +20,48 @@ async function main() {
   const pdfFiles = files.filter((file) => PATH.extname(file) === ".pdf");
   for (let i = 0; i < pdfFiles.length; i++) {
     try {
-      const filePath = `${tempPath}/${pdfFiles[i]}`;
+      const pdfPath = `${tempPath}/${pdfFiles[i]}`;
+      const pdfName = pdfFiles[i].split(".")[0];
+      const workDirectory = `${tempPath}/${pdfName}/`;
+      let document = await OCRDB.get(db, pdfName);
+      const folderFinalFile = getFinalPath(
+        document[0].create_time,
+        document[0].hash
+      );
 
-      const dirName = pdfFiles[i].split(".")[0];
-      if (!fs.existsSync(`${tempPath}/${dirName}/`)) {
-        fs.mkdirSync(`${tempPath}/${dirName}/`);
+      if (!fs.existsSync(workDirectory)) {
+        fs.mkdirSync(workDirectory);
       }
 
-      const outPath = `${tempPath}/${dirName}/`;
-      await IMAGES.convert(filePath, outPath);
+      await IMAGES.convert(pdfPath, workDirectory);
+      await IMAGES.makeTiffFromImages(pdfName, workDirectory);
+      await OCR.makePDFTextFromTiff(pdfName, workDirectory);
+      await PDF.makeSearchablePDF(pdfName, workDirectory, pdfPath);
+      moveSearchablePDF(
+        workDirectory,
+        generatedPDFSPath,
+        pdfFiles[i],
+        folderFinalFile
+      );
 
-      const imagePaths = await fsPromises.readdir(outPath);
-      let ocrText = "";
-      for (let j = 0; j < imagePaths.length; j++) {
-        ocrText += " " + (await OCR.recognize(`${outPath}/${imagePaths[j]}`));
-        fs.unlinkSync(`${outPath}/${imagePaths[j]}`);
-      }
-      //Para hacer el tesseract de forma asincrona
-      /*const imagesPromises = imagePaths.map(async (imagePath) => {
-        const text = await OCR.recognize(`${outPath}/${imagePath}`);
-        fs.unlinkSync(`${outPath}/${imagePath}`);
-        return text;
-      });
+      let pdfText = await OCR.recognize(`${workDirectory}/${pdfName}.tiff`);
 
-      const texts = await Promise.all(imagesPromises);
-      let ocrText = texts.toString();*/
-      fs.rmdirSync(outPath);
-      ocrText = ocrText.replace(/'/g, " ");
-      ocrText = ocrText.replace(/\r?\n|\r/g, " ");
-      await OCRDB.insertDb(db, dirName, ocrText);
-      const doc = await OCRSOLR.insertSolr(solrconfig, dirName, ocrText);
+      pdfText = pdfText.replace(/'/g, " ");
+      pdfText = pdfText.replace(/\r?\n|\r/g, " ");
+      await OCRDB.insertDb(db, pdfName, pdfText);
+      const doc = await OCRSOLR.insertSolr(solrconfig, pdfName, pdfText);
       if (doc.error) {
         console.log(
           `No se guardo el documento en solr ${pdfFiles[i]} -> ${doc.error.msg}`
         );
       }
-      fs.unlinkSync(filePath);
+
+      fs.unlinkSync(pdfPath);
+      fs.rmdirSync(workDirectory, { recursive: true });
     } catch (error) {
       console.log(`Error en el archivo ${pdfFiles[i]} -> ${error.message}`);
     }
   }
-
   setTimeout(() => {
     main();
   }, 1000);
@@ -97,5 +99,28 @@ function getEnvVars() {
     port: process.env.SOLR_PORT,
   };
 
-  return { morsaaDBconfig, solrconfig };
+  if (!process.env.GENERATED_PDFS_PATH) {
+    throw new Error("Falta difinir la variable de entorno GENERATED_PDFS_PATH");
+  }
+
+  const generatedPDFSPath = process.env.GENERATED_PDFS_PATH;
+
+  return { morsaaDBconfig, solrconfig, generatedPDFSPath };
+}
+function getFinalPath(date, hash) {
+  documentDate = new Date(date);
+  year = documentDate.getFullYear();
+  month = ("0" + (documentDate.getMonth() + 1)).slice(-2);
+  date = ("0" + documentDate.getDate()).slice(-2);
+  return year + "/" + month + "/" + date + "/" + hash + ".pdf";
+}
+
+function moveSearchablePDF(source, destination, file, finalName) {
+  fs.rename(`${source}/${file}`, `${destination}/${finalName}`, (error) => {
+    if (error) {
+      console.log(
+        `Error al mover el archivo ${file} de ${source} a ${destination}`
+      );
+    }
+  });
 }
